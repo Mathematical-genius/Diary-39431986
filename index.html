@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แอปบันทึกไดอารี่</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* --- Spinner --- */
+        #initialSpinner {
+            display: none; /* ซ่อนไว้เป็นค่าเริ่มต้น */
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #initialSpinner.active {
+            display: flex; /* แสดงเมื่อ active */
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- PIN Screen --- */
+        .pin-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            border: 2px solid #a0aec0;
+            transition: background-color 0.2s ease;
+        }
+        .pin-dot.filled {
+            background-color: #4a5568;
+            border-color: #4a5568;
+        }
+        .pin-btn {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            background-color: #f7fafc;
+            border: 1px solid #e2e8f0;
+            font-size: 1.5rem;
+            color: #2d3748;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .pin-btn:hover {
+            background-color: #e2e8f0;
+        }
+
+        /* --- Modal --- */
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        
+        /* --- Project Card Status --- */
+        .project-card { position: relative; }
+        .project-status-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            border-top-left-radius: 0.5rem;
+            border-bottom-left-radius: 0.5rem;
+        }
+        .project-status-bar.warning { background-color: #f59e0b; }
+        .project-status-bar.expired { background-color: #ef4444; }
+
+        /* --- Entry Card Status --- */
+        .diary-entry {
+            position: relative;
+            padding-left: 1.25rem; /* เพิ่ม padding ซ้ายให้แถบสี */
+            cursor: pointer; /* ทำให้คลิกได้ */
+            transition: background-color 0.1s;
+        }
+        .diary-entry:hover {
+            background-color: #f9fafb; /* สีอ่อนๆ ตอน hover */
+        }
+
+        .status-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            border-top-left-radius: 0.5rem;
+            border-bottom-left-radius: 0.5rem;
+        }
+        .status-bar.safe { background-color: #22c55e; }
+        .status-bar.warning { background-color: #f59e0b; }
+        .status-bar.expired { background-color: #ef4444; }
+
+        /* --- Entry Type Toggle --- */
+        .entry-type-toggle {
+            display: flex;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            overflow: hidden;
+        }
+        .entry-type-toggle input { display: none; }
+        .entry-type-toggle label {
+            flex: 1;
+            text-align: center;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            background-color: #ffffff;
+            color: #4b5563;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .entry-type-toggle input:checked + label {
+            background-color: #3b82f6;
+            color: #ffffff;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Global Spinner (ซ่อนไว้เป็นค่าเริ่มต้น) -->
+    <div id="initialSpinner" class="active">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- View 0: PIN Lock Screen (Default View) -->
+    <div id="view-0" class="view active">
+        <div class="container mx-auto max-w-sm p-4 min-h-screen flex flex-col justify-center items-center">
+            <div class="bg-white p-6 rounded-xl shadow-lg w-full">
+                <h2 class="text-2xl font-bold text-center text-gray-800 mb-4">กรุณาใส่ PIN</h2>
+                <!-- PIN Dots -->
+                <div class="flex justify-center space-x-4 my-6">
+                    <div id="dot-1" class="pin-dot"></div>
+                    <div id="dot-2" class="pin-dot"></div>
+                    <div id="dot-3" class="pin-dot"></div>
+                    <div id="dot-4" class="pin-dot"></div>
+                </div>
+                <!-- PIN Error Message -->
+                <p id="pinError" class="text-red-500 text-center text-sm mb-4 h-5"></p>
+                <!-- PIN Pad -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="pin-btn" data-key="1">1</div>
+                    <div class="pin-btn" data-key="2">2</div>
+                    <div class="pin-btn" data-key="3">3</div>
+                    <div class="pin-btn" data-key="4">4</div>
+                    <div class="pin-btn" data-key="5">5</div>
+                    <div class="pin-btn" data-key="6">6</div>
+                    <div class="pin-btn" data-key="7">7</div>
+                    <div class="pin-btn" data-key="8">8</div>
+                    <div class="pin-btn" data-key="9">9</div>
+                    <div class="col-start-2 pin-btn" data-key="0">0</div>
+                    <div class="pin-btn flex justify-center items-center" data-key="del" style="font-size: 1rem;">ลบ</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View 1: Project List -->
+    <div id="view-1" class="view">
+        <div class="container mx-auto max-w-xl p-4">
+            <div class="bg-white p-5 rounded-xl shadow-lg">
+                <h1 class="text-2xl font-bold text-gray-800 mb-4">สร้างโปรเจกต์ใหม่</h1>
+                <div class="flex space-x-3">
+                    <input type="text" id="newProjectName" class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ชื่อโปรเจกต์...">
+                    <button id="createProjectBtn" class="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold shadow-md hover:bg-blue-700 transition duration-200">
+                        สร้าง
+                    </button>
+                </div>
+            </div>
+
+            <div id="projectListContainer" class="mt-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">โปรเจกต์ทั้งหมด</h2>
+                <!-- Project cards will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- View 2: Entries -->
+    <div id="view-2" class="view">
+        <div class="container mx-auto max-w-xl p-4">
+            <!-- Back Button -->
+            <button id="backToProjectsBtn" class="text-blue-600 hover:text-blue-800 font-medium mb-2">
+                &larr; กลับไปหน้าโปรเจกต์
+            </button>
+            
+            <!-- Entry Form Card -->
+            <div class="bg-white p-5 rounded-xl shadow-lg mb-6">
+                <h1 id="projectNameDisplay" class="text-2xl font-bold text-gray-800 mb-4">...</h1>
+                
+                <!-- Entry Type Toggle -->
+                <div class="entry-type-toggle mb-4">
+                    <input type="radio" id="typeGeneral" name="entryType" value="general" checked>
+                    <label for="typeGeneral">🗒️ บันทึกทั่วไป</label>
+                    <input type="radio" id="typeReminder" name="entryType" value="reminder">
+                    <label for="typeReminder">⏰ แจ้งเตือน</label>
+                </div>
+
+                <!-- General Fields (Date, Title, Text) -->
+                <div id="generalFields">
+                    <label for="diaryDate" class="block text-sm font-medium text-gray-700 mb-1">เลือกวันที่:</label>
+                    <input type="date" id="diaryDate" class="w-full mb-3 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- (FIX) Reminder Fields (Start/End Date) - ให้อยู่บรรทัดเดียว -->
+                <div id="reminderFields" class="hidden flex space-x-4 mb-3">
+                    <div class="flex-1">
+                        <label for="reminderStartDate" class="block text-sm font-medium text-gray-700 mb-1">วันที่เริ่ม:</label>
+                        <input type="date" id="reminderStartDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1">
+                        <label for="reminderEndDate" class="block text-sm font-medium text-gray-700 mb-1">วันที่สิ้นสุด:</label>
+                        <input type="date" id="reminderEndDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <input type="text" id="diaryTitle" placeholder="หัวข้อ (ไม่บังคับ)..." class="w-full mb-3 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <textarea id="diaryEntry" rows="5" placeholder="เขียนบันทึกของคุณที่นี่..." class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                
+                <button id="saveEntryBtn" class="w-full bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold shadow-md hover:bg-blue-700 transition duration-200">
+                    บันทึก
+                </button>
+            </div>
+
+            <!-- Diary List -->
+            <div class="mt-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-3">บันทึกที่ผ่านมา</h2>
+                <div id="diaryListContainer" class="space-y-4">
+                    <!-- Diary entries will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- (*** MODIFIED ***) Modal: Confirm Delete -->
+    <div id="confirmDeleteModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-lg font-bold mb-4">ยืนยันการลบ</h3>
+            <p id="deleteModalMessage" class="mb-4"></p>
+            
+            <!-- (*** NEW ***) Input field for delete confirmation -->
+            <p class="text-sm text-gray-600 mb-2">โปรดพิมพ์ "<span class="font-bold text-red-600">ลบ</span>" เพื่อยืนยัน:</p>
+            <input type="text" id="deleteConfirmInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 mb-6">
+            
+            <div class="flex justify-end space-x-3">
+                <button id="deleteModalCancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">ยกเลิก</button>
+                <!-- (*** MODIFIED ***) Button is disabled by default -->
+                <button id="deleteModalConfirm" class="px-4 py-2 bg-red-400 text-white rounded-lg transition-colors" disabled>ลบ</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: Edit Project Name -->
+    <div id="projectEditModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 class="text-lg font-bold mb-4">แก้ไขชื่อโปรเจกต์</h3>
+            <input type="text" id="projectEditNameInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-6">
+            <div class="flex justify-end space-x-3">
+                <button id="projectEditCancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">ยกเลิก</button>
+                <button id="projectEditSave" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: View Entry Detail -->
+    <div id="entryDetailModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-xl w-full">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold" id="detailModalTitle">รายละเอียดบันทึก</h3>
+                <button id="detailModalClose" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="space-y-3">
+                <div>
+                    <span class="font-semibold text-gray-700">ประเภท:</span>
+                    <span id="detailModalType"></span>
+                </div>
+                <div>
+                    <span class="font-semibold text-gray-700" id="detailModalDateLabel">วันที่:</span>
+                    <span id="detailModalDate"></span>
+                </div>
+                <div id="detailModalStatusContainer" class="hidden">
+                    <span class="font-semibold text-gray-700">สถานะ:</span>
+                    <span id="detailModalStatus"></span>
+                </div>
+                <hr>
+                <!-- Title (if exists) -->
+                <div id="detailModalTitleContainer" class="hidden">
+                    <h4 class="text-lg font-semibold" id="detailModalEntryTitle"></h4>
+                </div>
+                
+                <!-- Content (with improved copy button) -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <p class="font-semibold text-gray-700">เนื้อหา:</p>
+                        <button id="detailModalCopyBtn" class="flex items-center space-x-1.5 px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                            <!-- ไอคอนจะถูกเติมโดย JS -->
+                        </button>
+                    </div>
+                    <p id="detailModalContent" class="text-gray-800 whitespace-pre-wrap bg-gray-50 p-3 rounded-md mt-1 min-h-[100px]"></p>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    
+
+
+    <script type="module" src="script.min.js"></script>
+</body>
+</html>
